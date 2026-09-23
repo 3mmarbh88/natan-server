@@ -1,0 +1,19 @@
+﻿node_modules/
+.env
+.env.*
+!.env.example
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+
+# Local test/debug files
+check-password.js
+check-user.js
+disable-test-device.js
+reset-test-password.js
+server-log.txt
+
+# Backup files
+*.backup
+*.backup-*
