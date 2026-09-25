@@ -327,11 +327,13 @@ app.get(
 
 app.post(
     "/api/auth/register",
+    loginLimiter,
     async (req, res) => {
 
         try {
 
             const {
+                username,
                 fullName,
                 email,
                 phone,
@@ -341,6 +343,14 @@ app.post(
                 platform,
                 appVersion
             } = req.body;
+
+            /* =====================================================
+               REGISTRATION
+               Activation code is NOT required during registration.
+            ===================================================== */
+
+            const cleanUsername =
+                normalizeUsername(username);
 
             const cleanFullName =
                 fullName === undefined ||
@@ -357,38 +367,35 @@ app.post(
                     ? ""
                     : String(phone).trim();
 
-            if (!cleanFullName) {
+            const cleanDeviceId =
+                deviceId === undefined ||
+                deviceId === null
+                    ? ""
+                    : String(deviceId).trim();
 
+            /* Username */
+
+            if (!cleanUsername) {
                 return res.status(400).json({
                     success: false,
-                    message:
-                        "Full name is required."
+                    message: "Username is required."
                 });
             }
 
-            if (!cleanEmail) {
-
+            if (cleanUsername.length < 3) {
                 return res.status(400).json({
                     success: false,
                     message:
-                        "Email is required."
+                        "Username must contain at least 3 characters."
                 });
             }
 
-            if (!cleanPhone) {
-
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "Phone number is required."
-                });
-            }
+            /* Password */
 
             if (
                 !password ||
                 String(password).length < 6
             ) {
-
                 return res.status(400).json({
                     success: false,
                     message:
@@ -396,8 +403,73 @@ app.post(
                 });
             }
 
+            /* Device */
 
-            /* Check email */
+            if (!cleanDeviceId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Device ID is required."
+                });
+            }
+
+            /* Full name */
+
+            if (!cleanFullName) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Full name is required."
+                });
+            }
+
+            /* Email */
+
+            if (!cleanEmail) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Email is required."
+                });
+            }
+
+            /* Phone */
+
+            if (!cleanPhone) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Phone number is required."
+                });
+            }
+
+            /* =====================================================
+               CHECK USERNAME
+            ===================================================== */
+
+            const {
+                data: existingUsername,
+                error: usernameError
+            } =
+                await supabase
+                    .from("natan_users")
+                    .select("id")
+                    .eq("username", cleanUsername)
+                    .maybeSingle();
+
+            if (usernameError) {
+                return res.status(500).json({
+                    success: false,
+                    message: usernameError.message
+                });
+            }
+
+            if (existingUsername) {
+                return res.status(409).json({
+                    success: false,
+                    message: "Username already exists."
+                });
+            }
+
+            /* =====================================================
+               CHECK EMAIL
+            ===================================================== */
 
             const {
                 data: existingEmail,
@@ -406,32 +478,26 @@ app.post(
                 await supabase
                     .from("natan_users")
                     .select("id")
-                    .eq(
-                        "email",
-                        cleanEmail
-                    )
+                    .eq("email", cleanEmail)
                     .maybeSingle();
 
             if (emailError) {
-
                 return res.status(500).json({
                     success: false,
-                    message:
-                        emailError.message
+                    message: emailError.message
                 });
             }
 
             if (existingEmail) {
-
                 return res.status(409).json({
                     success: false,
-                    message:
-                        "Email already exists."
+                    message: "Email already exists."
                 });
             }
 
-
-            /* Check phone */
+            /* =====================================================
+               CHECK PHONE
+            ===================================================== */
 
             const {
                 data: existingPhone,
@@ -440,79 +506,55 @@ app.post(
                 await supabase
                     .from("natan_users")
                     .select("id")
-                    .eq(
-                        "phone",
-                        cleanPhone
-                    )
+                    .eq("phone", cleanPhone)
                     .maybeSingle();
 
             if (phoneError) {
-
                 return res.status(500).json({
                     success: false,
-                    message:
-                        phoneError.message
+                    message: phoneError.message
                 });
             }
 
             if (existingPhone) {
-
                 return res.status(409).json({
                     success: false,
-                    message:
-                        "Phone number already exists."
+                    message: "Phone number already exists."
                 });
             }
 
-
-            /* Generate username */
-
-            let generatedUsername =
-                cleanPhone
-                    .replace(/[^\dA-Za-z]/g, "")
-                    .toLowerCase();
-
-            if (!generatedUsername) {
-
-                generatedUsername =
-                    cleanEmail
-                        .split("@")[0]
-                        .replace(
-                            /[^a-zA-Z0-9._-]/g,
-                            ""
-                        )
-                        .toLowerCase();
-            }
-
-            if (
-                generatedUsername.length < 3
-            ) {
-
-                generatedUsername =
-                    `natan_${crypto.randomBytes(4).toString("hex")}`;
-            }
-
-
-            /* Check username */
+            /* =====================================================
+               CHECK DEVICE
+            ===================================================== */
 
             const {
-                data: existingUsername
+                data: existingDevice,
+                error: deviceCheckError
             } =
                 await supabase
-                    .from("natan_users")
-                    .select("id")
-                    .eq(
-                        "username",
-                        generatedUsername
-                    )
+                    .from("natan_devices")
+                    .select("id,user_id,is_active")
+                    .eq("device_id", cleanDeviceId)
                     .maybeSingle();
 
-            if (existingUsername) {
-
-                generatedUsername =
-                    `${generatedUsername}_${crypto.randomBytes(3).toString("hex")}`;
+            if (deviceCheckError) {
+                return res.status(500).json({
+                    success: false,
+                    message: deviceCheckError.message
+                });
             }
 
+            if (existingDevice) {
+                return res.status(409).json({
+                    success: false,
+                    message:
+                        "This device is already registered."
+                });
+            }
+
+            /* =====================================================
+               HASH PASSWORD
+            ===================================================== */
 
             const passwordHash =
                 await bcrypt.hash(
@@ -520,8 +562,9 @@ app.post(
                     12
                 );
 
-
-            /* Create inactive-from-activation account */
+            /* =====================================================
+               CREATE UNACTIVATED USER
+            ===================================================== */
 
             const {
                 data: user,
@@ -530,33 +573,21 @@ app.post(
                 await supabase
                     .from("natan_users")
                     .insert({
+                        username: cleanUsername,
+                        email: cleanEmail,
+                        phone: cleanPhone,
+                        password_hash: passwordHash,
+                        full_name: cleanFullName,
 
-                        username:
-                            generatedUsername,
+                        is_active: true,
 
-                        email:
-                            cleanEmail,
+                        /* User can enter the app,
+                           but protected features require activation. */
+                        is_activated: false,
 
-                        phone:
-                            cleanPhone,
+                        activation_expires_at: null,
 
-                        password_hash:
-                            passwordHash,
-
-                        full_name:
-                            cleanFullName,
-
-                        is_active:
-                            true,
-
-                        is_activated:
-                            false,
-
-                        activation_expires_at:
-                            null,
-
-                        max_devices:
-                            1
+                        max_devices: 1
                     })
                     .select(
                         "id,username,email,phone,full_name,is_active,is_activated,activation_expires_at,max_devices,created_at,updated_at"
@@ -564,621 +595,151 @@ app.post(
                     .single();
 
             if (userError) {
-
                 return res.status(500).json({
                     success: false,
-                    message:
-                        userError.message
+                    message: userError.message
                 });
             }
 
+            /* =====================================================
+               REGISTER DEVICE
+            ===================================================== */
 
-            /* Register device */
-
-            if (deviceId) {
-
+            const {
+                data: registeredDevice,
+                error: deviceError
+            } =
                 await supabase
                     .from("natan_devices")
                     .insert({
-
-                        user_id:
-                            user.id,
-
-                        device_id:
-                            String(deviceId),
-
-                        device_name:
-                            deviceName || null,
-
-                        platform:
-                            platform || null,
-
-                        app_version:
-                            appVersion || null,
-
-                        is_active:
-                            true
-                    });
-            }
-
-
-            /* Activity */
-
-            await supabase
-                .from("natan_activity_logs")
-                .insert({
-
-                    user_id:
-                        user.id,
-
-                    action:
-                        "register",
-
-                    description:
-                        "NATAN account registered and awaiting activation.",
-
-                    device_id:
-                        deviceId || null
-                });
-
-
-            return res.status(201).json({
-
-                success:
-                    true,
-
-                message:
-                    "Account created successfully. Activation is required before login.",
-
-                requiresActivation:
-                    true,
-
-                user: {
-
-                    id:
-                        user.id,
-
-                    username:
-                        user.username,
-
-                    email:
-                        user.email,
-
-                    phone:
-                        user.phone,
-
-                    fullName:
-                        user.full_name,
-
-                    active:
-                        user.is_active,
-
-                    isActivated:
-                        user.is_activated,
-
-                    expiresAt:
-                        null,
-
-                    maxDevices:
-                        user.max_devices
-                }
-            });
-
-        } catch (error) {
-
-            console.error(
-                "Register error:",
-                error
-            );
-
-            return res.status(500).json({
-                success: false,
-                message:
-                    "Server error."
-            });
-        }
-    }
-);
-
-
-/* =========================================================
-   USER ACTIVATE
-========================================================= */
-
-app.post(
-    "/api/auth/activate",
-    loginLimiter,
-    async (req, res) => {
-
-        try {
-
-            const {
-                username,
-                email,
-                phone,
-                identifier,
-                activationCode,
-                deviceId
-            } = req.body;
-
-
-            const loginIdentifier =
-                String(
-                    identifier ||
-                    username ||
-                    email ||
-                    phone ||
-                    ""
-                ).trim();
-
-            const cleanActivationCode =
-                String(
-                    activationCode || ""
-                )
-                    .trim()
-                    .toUpperCase();
-
-
-            if (!loginIdentifier) {
-
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "Username, email or phone number is required."
-                });
-            }
-
-            if (!cleanActivationCode) {
-
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "Activation code is required."
-                });
-            }
-
-
-            /* Find user */
-
-            const cleanIdentifier =
-                loginIdentifier.toLowerCase();
-
-            let user = null;
-            let userError = null;
-
-
-            const byUsername =
-                await supabase
-                    .from("natan_users")
-                    .select("*")
-                    .eq(
-                        "username",
-                        cleanIdentifier
-                    )
-                    .maybeSingle();
-
-            if (byUsername.error) {
-
-                userError =
-                    byUsername.error;
-
-            } else {
-
-                user =
-                    byUsername.data;
-            }
-
-
-            if (!user) {
-
-                const byEmail =
-                    await supabase
-                        .from("natan_users")
-                        .select("*")
-                        .eq(
-                            "email",
-                            cleanIdentifier
-                        )
-                        .maybeSingle();
-
-                if (byEmail.error) {
-
-                    userError =
-                        byEmail.error;
-
-                } else {
-
-                    user =
-                        byEmail.data;
-                }
-            }
-
-
-            if (!user) {
-
-                const byPhone =
-                    await supabase
-                        .from("natan_users")
-                        .select("*")
-                        .eq(
-                            "phone",
-                            loginIdentifier
-                        )
-                        .maybeSingle();
-
-                if (byPhone.error) {
-
-                    userError =
-                        byPhone.error;
-
-                } else {
-
-                    user =
-                        byPhone.data;
-                }
-            }
-
-
-            if (userError) {
-
-                return res.status(500).json({
-                    success: false,
-                    message:
-                        userError.message
-                });
-            }
-
-
-            if (!user) {
-
-                return res.status(404).json({
-                    success: false,
-                    message:
-                        "User account not found."
-                });
-            }
-
-
-            /* Admin disabled account */
-
-            if (!user.is_active) {
-
-                return res.status(403).json({
-                    success: false,
-                    message:
-                        "Your NATAN account is disabled."
-                });
-            }
-
-
-            /* Already activated */
-
-            if (user.is_activated === true) {
-
-                return res.status(409).json({
-                    success: false,
-                    message:
-                        "This account is already activated.",
-                    alreadyActivated: true
-                });
-            }
-
-
-            /* Find activation code */
-
-            const {
-                data: activation,
-                error: activationError
-            } =
-                await supabase
-                    .from("natan_activation_codes")
-                    .select("*")
-                    .eq(
-                        "code",
-                        cleanActivationCode
-                    )
-                    .eq(
-                        "is_used",
-                        false
-                    )
-                    .maybeSingle();
-
-            if (activationError) {
-
-                return res.status(500).json({
-                    success: false,
-                    message:
-                        activationError.message
-                });
-            }
-
-
-            if (!activation) {
-
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "Invalid or already used activation code."
-                });
-            }
-
-
-            /* Code expiry */
-
-            if (
-                activation.expires_at &&
-                new Date(
-                    activation.expires_at
-                ) <= new Date()
-            ) {
-
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "Activation code has expired."
-                });
-            }
-
-
-            const durationDays =
-                Number(
-                    activation.duration_days ||
-                    30
-                );
-
-            if (
-                !Number.isInteger(durationDays) ||
-                durationDays < 1
-            ) {
-
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "Invalid activation duration."
-                });
-            }
-
-
-            const expiresAt =
-                new Date();
-
-            expiresAt.setDate(
-                expiresAt.getDate() +
-                durationDays
-            );
-
-
-            /* Activate account */
-
-            const {
-                data: updatedUser,
-                error: updateUserError
-            } =
-                await supabase
-                    .from("natan_users")
-                    .update({
-
-                        is_activated:
-                            true,
-
-                        activation_expires_at:
-                            expiresAt.toISOString(),
-
-                        updated_at:
-                            new Date().toISOString()
+                        user_id: user.id,
+                        device_id: cleanDeviceId,
+                        device_name: deviceName || null,
+                        platform: platform || null,
+                        app_version: appVersion || null,
+                        is_active: true
                     })
-                    .eq(
-                        "id",
-                        user.id
-                    )
                     .select(
-                        "id,username,email,phone,full_name,is_active,is_activated,activation_expires_at,max_devices,created_at,updated_at"
+                        "id,device_id,user_id,is_active"
                     )
                     .single();
 
-
-            if (updateUserError) {
-
-                return res.status(500).json({
-                    success: false,
-                    message:
-                        updateUserError.message
-                });
-            }
-
-
-            /* Consume code */
-
-            const {
-                data: consumedCode,
-                error: updateCodeError
-            } =
-                await supabase
-                    .from("natan_activation_codes")
-                    .update({
-
-                        is_used:
-                            true,
-
-                        used_by:
-                            user.id,
-
-                        used_at:
-                            new Date().toISOString()
-                    })
-                    .eq(
-                        "id",
-                        activation.id
-                    )
-                    .eq(
-                        "is_used",
-                        false
-                    )
-                    .select(
-                        "id"
-                    )
-                    .maybeSingle();
-
-
-            if (updateCodeError) {
-
-                console.error(
-                    "Activation code update error:",
-                    updateCodeError
-                );
-
-                /*
-                 * Roll back account activation
-                 * if the code could not be consumed.
-                 */
+            if (deviceError) {
 
                 await supabase
                     .from("natan_users")
-                    .update({
-
-                        is_activated:
-                            false,
-
-                        activation_expires_at:
-                            null,
-
-                        updated_at:
-                            new Date().toISOString()
-                    })
-                    .eq(
-                        "id",
-                        user.id
-                    );
+                    .delete()
+                    .eq("id", user.id);
 
                 return res.status(500).json({
                     success: false,
-                    message:
-                        "Unable to complete activation."
+                    message: deviceError.message
                 });
             }
 
-
-            if (!consumedCode) {
-
-                await supabase
-                    .from("natan_users")
-                    .update({
-
-                        is_activated:
-                            false,
-
-                        activation_expires_at:
-                            null,
-
-                        updated_at:
-                            new Date().toISOString()
-                    })
-                    .eq(
-                        "id",
-                        user.id
-                    );
-
-                return res.status(409).json({
-                    success: false,
-                    message:
-                        "Activation code was already used."
-                });
-            }
-
-
-            /* Activity */
+            /* =====================================================
+               ACTIVITY LOG
+            ===================================================== */
 
             await supabase
                 .from("natan_activity_logs")
                 .insert({
-
-                    user_id:
-                        user.id,
-
-                    action:
-                        "activate",
-
+                    user_id: user.id,
+                    action: "register",
                     description:
-                        `NATAN account activated for ${durationDays} days.`,
-
-                    device_id:
-                        deviceId || null
+                        "NATAN account registered successfully. Activation is required for protected features.",
+                    device_id: cleanDeviceId
                 });
 
-
-            /* JWT */
+            /* =====================================================
+               CREATE LOGIN TOKEN
+            ===================================================== */
 
             const token =
                 createToken({
-
-                    id:
-                        updatedUser.id,
-
-                    username:
-                        updatedUser.username,
-
-                    role:
-                        "user"
+                    id: user.id,
+                    username: user.username,
+                    role: "user"
                 });
 
+            /* =====================================================
+               SUCCESS
+            ===================================================== */
 
-            return res.json({
+            return res.status(201).json({
 
-                success:
-                    true,
+                success: true,
 
                 message:
-                    "Account activated successfully.",
+                    "NATAN account created successfully. Activation is required for protected features.",
+
+                requiresActivation: true,
 
                 token,
 
                 user: {
 
-                    id:
-                        updatedUser.id,
+                    id: user.id,
 
-                    username:
-                        updatedUser.username,
+                    username: user.username,
 
-                    email:
-                        updatedUser.email,
+                    email: user.email,
 
-                    phone:
-                        updatedUser.phone,
+                    phone: user.phone,
 
-                    fullName:
-                        updatedUser.full_name,
+                    fullName: user.full_name,
 
-                    active:
-                        updatedUser.is_active,
+                    active: user.is_active,
 
-                    isActivated:
-                        updatedUser.is_activated,
+                    isActivated: user.is_activated,
 
                     expiresAt:
-                        updatedUser.activation_expires_at,
+                        user.activation_expires_at,
 
                     maxDevices:
-                        updatedUser.max_devices
+                        user.max_devices,
+
+                    createdAt:
+                        user.created_at,
+
+                    updatedAt:
+                        user.updated_at
+                },
+
+                device: {
+
+                    id:
+                        registeredDevice.id,
+
+                    deviceId:
+                        registeredDevice.device_id,
+
+                    userId:
+                        registeredDevice.user_id,
+
+                    active:
+                        registeredDevice.is_active
                 }
             });
 
         } catch (error) {
 
             console.error(
-                "Activation error:",
+                "NATAN register error:",
                 error
             );
 
             return res.status(500).json({
+
                 success: false,
+
                 message:
-                    "Server error."
+                    error?.message ||
+                    "Internal server error."
             });
         }
     }
 );
-
 
 /* =========================================================
    USER LOGIN
@@ -1367,37 +928,10 @@ app.post(
             }
 
 
-            /* Activation required */
+            /* Activation status */
 
-            if (
-                user.is_activated === false
-            ) {
-
-                return res.status(403).json({
-
-                    success:
-                        false,
-
-                    message:
-                        "Account activation is required.",
-
-                    requiresActivation:
-                        true,
-
-                    userId:
-                        user.id,
-
-                    username:
-                        user.username,
-
-                    email:
-                        user.email || null,
-
-                    phone:
-                        user.phone || null
-                });
-            }
-
+            const requiresActivation =
+                user.is_activated === false;
 
             /* Expired */
 
@@ -1595,6 +1129,8 @@ app.post(
 
                 token,
 
+                requiresActivation,
+
                 user: {
 
                     id:
@@ -1646,6 +1182,483 @@ app.post(
 /* =========================================================
    CURRENT USER
 ========================================================= */
+
+/* =========================================================
+   USER - ACTIVATE ACCOUNT
+========================================================= */
+
+app.post(
+    "/api/auth/activate",
+    async (req, res) => {
+
+        try {
+
+            const {
+                identifier,
+                activationCode,
+                deviceId
+            } = req.body || {};
+
+            const cleanIdentifier =
+                String(identifier || "").trim();
+
+            const cleanCode =
+                String(activationCode || "")
+                    .trim()
+                    .toUpperCase();
+
+            const cleanDeviceId =
+                String(deviceId || "").trim();
+
+
+            if (!cleanIdentifier) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Username, email, or phone is required."
+                });
+            }
+
+
+            if (!cleanCode) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Activation code is required."
+                });
+            }
+
+
+            if (!cleanDeviceId) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Device ID is required."
+                });
+            }
+
+
+            /* FIND USER */
+
+            let user = null;
+
+            const byUsername =
+                await supabase
+                    .from("natan_users")
+                    .select(
+                        "id,username,email,phone,full_name,is_active,is_activated,activation_expires_at,max_devices,created_at,updated_at"
+                    )
+                    .eq(
+                        "username",
+                        cleanIdentifier
+                    )
+                    .maybeSingle();
+
+
+            if (byUsername.data) {
+
+                user = byUsername.data;
+
+            } else {
+
+                const byEmail =
+                    await supabase
+                        .from("natan_users")
+                        .select(
+                            "id,username,email,phone,full_name,is_active,is_activated,activation_expires_at,max_devices,created_at,updated_at"
+                        )
+                        .eq(
+                            "email",
+                            cleanIdentifier.toLowerCase()
+                        )
+                        .maybeSingle();
+
+
+                if (byEmail.data) {
+
+                    user = byEmail.data;
+
+                } else {
+
+                    const byPhone =
+                        await supabase
+                            .from("natan_users")
+                            .select(
+                                "id,username,email,phone,full_name,is_active,is_activated,activation_expires_at,max_devices,created_at,updated_at"
+                            )
+                            .eq(
+                                "phone",
+                                cleanIdentifier
+                            )
+                            .maybeSingle();
+
+                    if (byPhone.data) {
+                        user = byPhone.data;
+                    }
+                }
+            }
+
+
+            if (!user) {
+                return res.status(404).json({
+                    success: false,
+                    message:
+                        "NATAN account not found."
+                });
+            }
+
+
+            if (!user.is_active) {
+                return res.status(403).json({
+                    success: false,
+                    message:
+                        "NATAN account is disabled."
+                });
+            }
+
+
+            /* VERIFY DEVICE */
+
+            const {
+                data: device,
+                error: deviceError
+            } =
+                await supabase
+                    .from("natan_devices")
+                    .select(
+                        "id,device_id,user_id,is_active"
+                    )
+                    .eq(
+                        "device_id",
+                        cleanDeviceId
+                    )
+                    .eq(
+                        "user_id",
+                        user.id
+                    )
+                    .maybeSingle();
+
+
+            if (deviceError) {
+
+                console.error(
+                    "Activation device lookup error:",
+                    deviceError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    message:
+                        "Unable to verify device."
+                });
+            }
+
+
+            if (!device) {
+                return res.status(403).json({
+                    success: false,
+                    message:
+                        "This device is not registered for this account."
+                });
+            }
+
+
+            if (!device.is_active) {
+                return res.status(403).json({
+                    success: false,
+                    message:
+                        "This device is disabled."
+                });
+            }
+
+
+            /* FIND ACTIVATION CODE */
+
+            const {
+                data: codeRow,
+                error: codeError
+            } =
+                await supabase
+                    .from("natan_activation_codes")
+                    .select(
+                        "id,code,duration_days,is_used,used_by,used_at,expires_at"
+                    )
+                    .eq(
+                        "code",
+                        cleanCode
+                    )
+                    .maybeSingle();
+
+
+            if (codeError) {
+
+                console.error(
+                    "Activation code lookup error:",
+                    codeError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    message:
+                        "Unable to verify activation code."
+                });
+            }
+
+
+            if (!codeRow) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Invalid activation code."
+                });
+            }
+
+
+            if (codeRow.is_used) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "This activation code has already been used."
+                });
+            }
+
+
+            if (
+                codeRow.expires_at &&
+                new Date(codeRow.expires_at) <= new Date()
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "This activation code has expired."
+                });
+            }
+
+
+            const durationDays =
+                Number(codeRow.duration_days);
+
+
+            if (
+                !Number.isInteger(durationDays) ||
+                durationDays < 1
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Invalid activation code duration."
+                });
+            }
+
+
+            /* CALCULATE LICENSE EXPIRY */
+
+            const now = new Date();
+
+            const currentExpiry =
+                user.activation_expires_at &&
+                new Date(user.activation_expires_at) > now
+                    ? new Date(user.activation_expires_at)
+                    : now;
+
+            currentExpiry.setDate(
+                currentExpiry.getDate() + durationDays
+            );
+
+
+            /* ACTIVATE USER */
+
+            const {
+                data: updatedUser,
+                error: updateUserError
+            } =
+                await supabase
+                    .from("natan_users")
+                    .update({
+                        is_activated: true,
+                        activation_expires_at:
+                            currentExpiry.toISOString()
+                    })
+                    .eq(
+                        "id",
+                        user.id
+                    )
+                    .select(
+                        "id,username,email,phone,full_name,is_active,is_activated,activation_expires_at,max_devices,created_at,updated_at"
+                    )
+                    .single();
+
+
+            if (updateUserError) {
+
+                console.error(
+                    "Activation user update error:",
+                    updateUserError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    message:
+                        "Unable to activate account."
+                });
+            }
+
+
+            /* CONSUME ACTIVATION CODE */
+
+            const {
+                data: consumedCode,
+                error: consumeError
+            } =
+                await supabase
+                    .from("natan_activation_codes")
+                    .update({
+                        is_used: true,
+                        used_by: user.id,
+                        used_at: now.toISOString()
+                    })
+                    .eq(
+                        "id",
+                        codeRow.id
+                    )
+                    .eq(
+                        "is_used",
+                        false
+                    )
+                    .select(
+                        "id,code,is_used,used_by,used_at"
+                    )
+                    .maybeSingle();
+
+
+            if (consumeError) {
+
+                console.error(
+                    "Activation code consume error:",
+                    consumeError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    message:
+                        "Account activated, but activation code could not be finalized."
+                });
+            }
+
+
+            if (!consumedCode) {
+
+                return res.status(409).json({
+                    success: false,
+                    message:
+                        "Activation code was already used."
+                });
+            }
+
+
+            /* ACTIVITY LOG */
+
+            await supabase
+                .from("natan_activity_logs")
+                .insert({
+                    user_id: user.id,
+                    action: "activate",
+                    description:
+                        "NATAN account activated successfully.",
+                    device_id: cleanDeviceId
+                });
+
+
+            /* CREATE TOKEN */
+
+            const token =
+                createToken({
+                    id: updatedUser.id,
+                    username:
+                        updatedUser.username,
+                    role:
+                        "user"
+                });
+
+
+            /* SUCCESS */
+
+            return res.json({
+
+                success: true,
+
+                message:
+                    "NATAN account activated successfully.",
+
+                requiresActivation:
+                    false,
+
+                token,
+
+                user: {
+
+                    id:
+                        updatedUser.id,
+
+                    username:
+                        updatedUser.username,
+
+                    email:
+                        updatedUser.email,
+
+                    phone:
+                        updatedUser.phone,
+
+                    fullName:
+                        updatedUser.full_name,
+
+                    active:
+                        updatedUser.is_active,
+
+                    isActivated:
+                        updatedUser.is_activated,
+
+                    expiresAt:
+                        updatedUser.activation_expires_at,
+
+                    maxDevices:
+                        updatedUser.max_devices
+                },
+
+                device: {
+
+                    id:
+                        device.id,
+
+                    deviceId:
+                        device.device_id,
+
+                    userId:
+                        device.user_id,
+
+                    active:
+                        device.is_active
+                }
+            });
+
+
+        } catch (error) {
+
+            console.error(
+                "Activation error:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                message:
+                    "Server error."
+            });
+        }
+    }
+);
+
+
 
 app.get(
     "/api/auth/me",
@@ -1701,36 +1714,6 @@ app.get(
                     success: false,
                     message:
                         "Account disabled."
-                });
-            }
-
-
-            if (
-                user.is_activated === false
-            ) {
-
-                return res.status(403).json({
-
-                    success:
-                        false,
-
-                    message:
-                        "Account activation is required.",
-
-                    requiresActivation:
-                        true,
-
-                    userId:
-                        user.id,
-
-                    username:
-                        user.username,
-
-                    email:
-                        user.email || null,
-
-                    phone:
-                        user.phone || null
                 });
             }
 
