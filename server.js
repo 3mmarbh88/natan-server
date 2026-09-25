@@ -1,4 +1,4 @@
-require("dotenv").config();
+﻿require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
@@ -10,6 +10,8 @@ const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
+
+app.set("trust proxy", 1);
 
 const PORT = Number(process.env.PORT || 3000);
 
@@ -321,6 +323,7 @@ app.get(
 );
 
 
+
 /* =========================================================
    USER REGISTER
 ========================================================= */
@@ -342,11 +345,10 @@ app.post(
                 deviceName,
                 platform,
                 appVersion
-            } = req.body;
+            } = req.body || {};
 
             /* =====================================================
-               REGISTRATION
-               Activation code is NOT required during registration.
+               NORMALIZE INPUT
             ===================================================== */
 
             const cleanUsername =
@@ -373,71 +375,108 @@ app.post(
                     ? ""
                     : String(deviceId).trim();
 
-            /* Username */
+
+            /* =====================================================
+               VALIDATION
+               Activation Code is NOT required here.
+            ===================================================== */
 
             if (!cleanUsername) {
+
                 return res.status(400).json({
                     success: false,
-                    message: "Username is required."
+                    message: "ظٹط±ط¬ظ‰ ط¥ط¯ط®ط§ظ„ ط§ط³ظ… ط§ظ„ظ…ط³طھط®ط¯ظ…."
                 });
             }
 
             if (cleanUsername.length < 3) {
+
                 return res.status(400).json({
                     success: false,
                     message:
-                        "Username must contain at least 3 characters."
+                        "ط§ط³ظ… ط§ظ„ظ…ط³طھط®ط¯ظ… ظٹط¬ط¨ ط£ظ† ظٹظƒظˆظ† 3 ط£ط­ط±ظپ ط£ظˆ ط£ط±ظ‚ط§ظ… ط¹ظ„ظ‰ ط§ظ„ط£ظ‚ظ„."
                 });
             }
 
-            /* Password */
+            if (
+                !/^[a-zA-Z0-9_.-]+$/.test(
+                    cleanUsername
+                )
+            ) {
+
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "ط§ط³ظ… ط§ظ„ظ…ط³طھط®ط¯ظ… ظٹط¬ط¨ ط£ظ† ظٹط­طھظˆظٹ ط¹ظ„ظ‰ ط£ط­ط±ظپ ط£ظˆ ط£ط±ظ‚ط§ظ… ط£ظˆ _ ط£ظˆ - ط£ظˆ . ظپظ‚ط·."
+                });
+            }
+
+
+            if (!cleanFullName) {
+
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "ظٹط±ط¬ظ‰ ط¥ط¯ط®ط§ظ„ ط§ظ„ط§ط³ظ… ط§ظ„ظƒط§ظ…ظ„."
+                });
+            }
+
+
+            if (!cleanEmail) {
+
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "ظٹط±ط¬ظ‰ ط¥ط¯ط®ط§ظ„ ط§ظ„ط¨ط±ظٹط¯ ط§ظ„ط¥ظ„ظƒطھط±ظˆظ†ظٹ."
+                });
+            }
+
+            if (
+                !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+                    cleanEmail
+                )
+            ) {
+
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "ظٹط±ط¬ظ‰ ط¥ط¯ط®ط§ظ„ ط¨ط±ظٹط¯ ط¥ظ„ظƒطھط±ظˆظ†ظٹ طµط­ظٹط­."
+                });
+            }
+
+
+            if (!cleanPhone) {
+
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "ظٹط±ط¬ظ‰ ط¥ط¯ط®ط§ظ„ ط±ظ‚ظ… ط§ظ„ظ‡ط§طھظپ."
+                });
+            }
+
 
             if (
                 !password ||
                 String(password).length < 6
             ) {
+
                 return res.status(400).json({
                     success: false,
                     message:
-                        "Password must contain at least 6 characters."
+                        "ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط± ظٹط¬ط¨ ط£ظ† طھظƒظˆظ† 6 ط£ط­ط±ظپ ط£ظˆ ط£ط±ظ‚ط§ظ… ط¹ظ„ظ‰ ط§ظ„ط£ظ‚ظ„."
                 });
             }
 
-            /* Device */
 
             if (!cleanDeviceId) {
+
                 return res.status(400).json({
                     success: false,
-                    message: "Device ID is required."
+                    message:
+                        "طھط¹ط°ط± ط§ظ„ط­طµظˆظ„ ط¹ظ„ظ‰ ظ…ط¹ط±ظپ ط§ظ„ط¬ظ‡ط§ط²."
                 });
             }
 
-            /* Full name */
-
-            if (!cleanFullName) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Full name is required."
-                });
-            }
-
-            /* Email */
-
-            if (!cleanEmail) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Email is required."
-                });
-            }
-
-            /* Phone */
-
-            if (!cleanPhone) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Phone number is required."
-                });
-            }
 
             /* =====================================================
                CHECK USERNAME
@@ -454,18 +493,28 @@ app.post(
                     .maybeSingle();
 
             if (usernameError) {
+
+                console.error(
+                    "Register username check:",
+                    usernameError
+                );
+
                 return res.status(500).json({
                     success: false,
-                    message: usernameError.message
+                    message:
+                        usernameError.message
                 });
             }
 
             if (existingUsername) {
+
                 return res.status(409).json({
                     success: false,
-                    message: "Username already exists."
+                    message:
+                        "ط§ط³ظ… ط§ظ„ظ…ط³طھط®ط¯ظ… ظ…ط³طھط®ط¯ظ… ط¨ط§ظ„ظپط¹ظ„."
                 });
             }
+
 
             /* =====================================================
                CHECK EMAIL
@@ -482,18 +531,28 @@ app.post(
                     .maybeSingle();
 
             if (emailError) {
+
+                console.error(
+                    "Register email check:",
+                    emailError
+                );
+
                 return res.status(500).json({
                     success: false,
-                    message: emailError.message
+                    message:
+                        emailError.message
                 });
             }
 
             if (existingEmail) {
+
                 return res.status(409).json({
                     success: false,
-                    message: "Email already exists."
+                    message:
+                        "ط§ظ„ط¨ط±ظٹط¯ ط§ظ„ط¥ظ„ظƒطھط±ظˆظ†ظٹ ظ…ط³طھط®ط¯ظ… ط¨ط§ظ„ظپط¹ظ„."
                 });
             }
+
 
             /* =====================================================
                CHECK PHONE
@@ -510,18 +569,28 @@ app.post(
                     .maybeSingle();
 
             if (phoneError) {
+
+                console.error(
+                    "Register phone check:",
+                    phoneError
+                );
+
                 return res.status(500).json({
                     success: false,
-                    message: phoneError.message
+                    message:
+                        phoneError.message
                 });
             }
 
             if (existingPhone) {
+
                 return res.status(409).json({
                     success: false,
-                    message: "Phone number already exists."
+                    message:
+                        "ط±ظ‚ظ… ط§ظ„ظ‡ط§طھظپ ظ…ط³طھط®ط¯ظ… ط¨ط§ظ„ظپط¹ظ„."
                 });
             }
+
 
             /* =====================================================
                CHECK DEVICE
@@ -533,24 +602,38 @@ app.post(
             } =
                 await supabase
                     .from("natan_devices")
-                    .select("id,user_id,is_active")
-                    .eq("device_id", cleanDeviceId)
+                    .select(
+                        "id,user_id,is_active"
+                    )
+                    .eq(
+                        "device_id",
+                        cleanDeviceId
+                    )
                     .maybeSingle();
 
             if (deviceCheckError) {
+
+                console.error(
+                    "Register device check:",
+                    deviceCheckError
+                );
+
                 return res.status(500).json({
                     success: false,
-                    message: deviceCheckError.message
+                    message:
+                        deviceCheckError.message
                 });
             }
 
             if (existingDevice) {
+
                 return res.status(409).json({
                     success: false,
                     message:
-                        "This device is already registered."
+                        "ظ‡ط°ط§ ط§ظ„ط¬ظ‡ط§ط² ظ…ط³ط¬ظ„ ط¨ط§ظ„ظپط¹ظ„."
                 });
             }
+
 
             /* =====================================================
                HASH PASSWORD
@@ -562,8 +645,9 @@ app.post(
                     12
                 );
 
+
             /* =====================================================
-               CREATE UNACTIVATED USER
+               CREATE USER
             ===================================================== */
 
             const {
@@ -573,36 +657,56 @@ app.post(
                 await supabase
                     .from("natan_users")
                     .insert({
-                        username: cleanUsername,
-                        email: cleanEmail,
-                        phone: cleanPhone,
-                        password_hash: passwordHash,
-                        full_name: cleanFullName,
+                        username:
+                            cleanUsername,
 
-                        is_active: true,
+                        email:
+                            cleanEmail,
 
-                        /* User can enter the app,
-                           but protected features require activation. */
-                        is_activated: false,
+                        phone:
+                            cleanPhone,
 
-                        activation_expires_at: null,
+                        password_hash:
+                            passwordHash,
 
-                        max_devices: 1
+                        full_name:
+                            cleanFullName,
+
+                        is_active:
+                            true,
+
+                        is_activated:
+                            false,
+
+                        activation_expires_at:
+                            null,
+
+                        max_devices:
+                            1
                     })
                     .select(
                         "id,username,email,phone,full_name,is_active,is_activated,activation_expires_at,max_devices,created_at,updated_at"
                     )
                     .single();
 
+
             if (userError) {
+
+                console.error(
+                    "Register user insert:",
+                    userError
+                );
+
                 return res.status(500).json({
                     success: false,
-                    message: userError.message
+                    message:
+                        userError.message
                 });
             }
 
+
             /* =====================================================
-               REGISTER DEVICE
+               CREATE DEVICE
             ===================================================== */
 
             const {
@@ -612,86 +716,146 @@ app.post(
                 await supabase
                     .from("natan_devices")
                     .insert({
-                        user_id: user.id,
-                        device_id: cleanDeviceId,
-                        device_name: deviceName || null,
-                        platform: platform || null,
-                        app_version: appVersion || null,
-                        is_active: true
+                        user_id:
+                            user.id,
+
+                        device_id:
+                            cleanDeviceId,
+
+                        device_name:
+                            deviceName || "NATAN Android",
+
+                        platform:
+                            platform || "android",
+
+                        app_version:
+                            appVersion || "4.0.0",
+
+                        is_active:
+                            true
                     })
                     .select(
                         "id,device_id,user_id,is_active"
                     )
                     .single();
 
+
             if (deviceError) {
+
+                console.error(
+                    "Register device insert:",
+                    deviceError
+                );
+
+                /*
+                 * Roll back the user because the device
+                 * is part of the registration.
+                 */
 
                 await supabase
                     .from("natan_users")
                     .delete()
-                    .eq("id", user.id);
+                    .eq(
+                        "id",
+                        user.id
+                    );
 
                 return res.status(500).json({
                     success: false,
-                    message: deviceError.message
+                    message:
+                        "طھظ… ط¥ظ†ط´ط§ط، ط§ظ„ظ…ط³طھط®ط¯ظ… ظ„ظƒظ† طھط¹ط°ط± طھط³ط¬ظٹظ„ ط§ظ„ط¬ظ‡ط§ط². طھظ… ط¥ظ„ط؛ط§ط، ط¹ظ…ظ„ظٹط© ط§ظ„طھط³ط¬ظٹظ„."
                 });
             }
 
+
             /* =====================================================
                ACTIVITY LOG
+               Logging failure must NOT cancel registration.
             ===================================================== */
 
-            await supabase
-                .from("natan_activity_logs")
-                .insert({
-                    user_id: user.id,
-                    action: "register",
-                    description:
-                        "NATAN account registered successfully. Activation is required for protected features.",
-                    device_id: cleanDeviceId
-                });
+            try {
 
-            /* =====================================================
-               CREATE LOGIN TOKEN
-            ===================================================== */
+                const {
+                    error: activityError
+                } =
+                    await supabase
+                        .from("natan_activity_logs")
+                        .insert({
 
-            const token =
-                createToken({
-                    id: user.id,
-                    username: user.username,
-                    role: "user"
-                });
+                            user_id:
+                                user.id,
+
+                            action:
+                                "register",
+
+                            description:
+                                "New NATAN user registered successfully.",
+
+                            device_id:
+                                cleanDeviceId
+                        });
+
+                if (activityError) {
+
+                    console.error(
+                        "Register activity log:",
+                        activityError
+                    );
+                }
+
+            } catch (activityException) {
+
+                console.error(
+                    "Register activity exception:",
+                    activityException
+                );
+            }
+
 
             /* =====================================================
                SUCCESS
+               
+               IMPORTANT:
+               Do NOT automatically log the user in.
+               The app should return to the login screen.
             ===================================================== */
 
             return res.status(201).json({
 
-                success: true,
+                success:
+                    true,
+
+                registrationComplete:
+                    true,
+
+                requiresActivation:
+                    true,
 
                 message:
-                    "NATAN account created successfully. Activation is required for protected features.",
-
-                requiresActivation: true,
-
-                token,
+                    "طھظ… ط¥ظ†ط´ط§ط، ط§ظ„ظ…ط³طھط®ط¯ظ… ط§ظ„ط¬ط¯ظٹط¯ ط¨ظ†ط¬ط§ط­. ظٹظ…ظƒظ†ظƒ ط§ظ„ط¢ظ† طھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„.",
 
                 user: {
 
-                    id: user.id,
+                    id:
+                        user.id,
 
-                    username: user.username,
+                    username:
+                        user.username,
 
-                    email: user.email,
+                    email:
+                        user.email,
 
-                    phone: user.phone,
+                    phone:
+                        user.phone,
 
-                    fullName: user.full_name,
+                    fullName:
+                        user.full_name,
 
-                    active: user.is_active,
+                    active:
+                        user.is_active,
 
-                    isActivated: user.is_activated,
+                    isActivated:
+                        user.is_activated,
 
                     expiresAt:
                         user.activation_expires_at,
@@ -720,7 +884,9 @@ app.post(
                     active:
                         registeredDevice.is_active
                 }
+
             });
+
 
         } catch (error) {
 
@@ -731,15 +897,17 @@ app.post(
 
             return res.status(500).json({
 
-                success: false,
+                success:
+                    false,
 
                 message:
                     error?.message ||
-                    "Internal server error."
+                    "ط­ط¯ط« ط®ط·ط£ ط¯ط§ط®ظ„ظٹ ط£ط«ظ†ط§ط، ط¥ظ†ط´ط§ط، ط§ظ„ط­ط³ط§ط¨."
             });
         }
     }
 );
+
 
 /* =========================================================
    USER LOGIN
