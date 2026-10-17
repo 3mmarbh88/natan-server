@@ -57,9 +57,6 @@ app.use(
     })
 );
 
-/* NATAN AI routes; keep before the API 404 handler. */
-app.use(require("./ai-routes"));
-
 app.use(
     express.urlencoded({
         extended: false
@@ -79,6 +76,9 @@ const generalLimiter = rateLimit({
 });
 
 app.use("/api/", generalLimiter);
+
+/* NATAN AI routes; protected by the existing API rate limiter. */
+app.use(require("./ai-routes"));
 
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
