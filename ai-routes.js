@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const API_KEY = process.env.GEMINI_API_KEY;
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 
 async function askGemini(prompt, json) {
   if (!API_KEY) throw new Error("GEMINI_API_KEY is not configured");
