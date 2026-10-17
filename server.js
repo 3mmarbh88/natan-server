@@ -57,6 +57,9 @@ app.use(
     })
 );
 
+/* NATAN AI routes; keep before the API 404 handler. */
+app.use(require("./ai-routes"));
+
 app.use(
     express.urlencoded({
         extended: false
